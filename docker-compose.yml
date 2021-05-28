@@ -1,1 +1,630 @@
-/home/dulanic/docker/docker-compose.yml
+version: "3.4"
+services:
+  ps5:
+    image: dulanic/ps5_stock
+  overseerr:
+    image: sctx/overseerr:latest
+    container_name: overseerr
+    env_file:
+      - ./envs/main.env
+    ports:
+      - 5055:5055
+    volumes:
+      - ./overseerr:/app/config
+    restart: unless-stopped
+  sopel:
+    container_name: sopel
+    image: sopelirc/sopel:latest
+    env_file:
+      - ./envs/main.env    
+    volumes:
+      - ./sopel:/home/sopel/.sopel
+
+  mongodb-bi-connector:
+    container_name: mongosqld
+    image: dulanic/mongodb-bi-connector:latest
+    user: '1000:1000'    
+    env_file:
+      - ./envs/mongobi.env
+    ports: 
+      - 3307:3307
+    volumes:
+      - ./mongodb-bi-connector:/var/log
+
+  mongoclient:
+    container_name: mongoclient
+    image: mongoclient/mongoclient
+    env_file:
+      - ./envs/mongobi.env
+    restart: always
+    ports: 
+      - 3005:3000
+    volumes:
+      - ./mongoclient:/data/db mongoclient/mongoclient
+
+  mealie:
+    container_name: mealie
+    image: hkotel/mealie:latest
+    restart: always
+    ports:
+      - 9925:80
+    environment:
+      DB_TYPE: sqlite
+      TZ: America/Chicago
+    volumes:
+      - ./mealie/data/:/app/data
+
+  webtop:
+    image: ghcr.io/linuxserver/webtop:latest
+    container_name: webtop
+    privileged: true #optional
+    env_file:
+      - ./envs/main.env
+    volumes:
+      - ./webtop:/config
+      - /var/run/docker.sock:/var/run/docker.sock #optional
+    ports:
+      - 3001:3000
+    shm_size: "1gb" #optional
+    restart: unless-stopped
+
+  swag:
+    image: ghcr.io/linuxserver/swag
+    container_name: swag
+    cap_add:
+      - NET_ADMIN
+    env_file:
+      - ./envs/main.env
+      - ./envs/swag.env
+    volumes:
+      - ./swag:/config
+      - ./recipes/media:/media
+      - /mnt/btrfs/youtube:/youtube-dl
+    ports:
+      - 443:443
+      - 80:80 #optional
+    restart: unless-stopped  
+
+  youtubedl:
+    image: nbr23/youtube-dl-server:youtube-dl
+    container_name: youtubedl
+    restart: unless-stopped
+    user: '1000:1000'
+    ports:
+      - "48080:8080"
+    volumes:
+      - /mnt/btrfs/youtube:/youtube-dl
+      - ./youtube/config:/app_config
+    env_file:
+      - ./envs/main.env
+      #- ./envs/youtubedl.env
+
+  mongo:
+    image: mongo:latest
+    container_name: 'mongo'
+    hostname: mongo
+    env_file:
+      - ./envs/main.env  
+      # - ./envs/mongo.env  
+    ports:
+      - 27017:27017
+    volumes:
+      - ./mongodb/database:/data/db
+    user: '1000:1000'
+    restart: unless-stopped    
+
+  collabora:
+    image: collabora/code
+    container_name: collabora
+    env_file:
+      - ./envs/main.env
+      - ./envs/collabora.env
+    volumes:
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime
+    ports:
+      - 9980:9980
+    cap_add:
+      - MKNOD      
+    restart: unless-stopped
+
+  mariadb:
+    container_name: mariadb
+    image: ghcr.io/linuxserver/mariadb
+    restart: unless-stopped
+    volumes:
+      - ./mariadb:/config
+    env_file:
+      - ./envs/main.env
+      - ./envs/mariadb.env
+    ports:
+      - 3306:3306
+
+  photoprism:
+    image: photoprism/photoprism:preview
+    container_name: photoprism    
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    ports:
+      - 2342:2342 
+    depends_on: 
+      - mariadb
+    env_file:
+      - ./envs/main.env
+      - ./envs/photoprism.env
+    volumes:
+      - ./photoprism/storage:/photoprism/storage
+      - /mnt/photos:/photoprism/import
+      - /mnt/btrfs/gp:/photoprism/import/gp
+      - /mnt/nc/dulanic/Family Pictures/InstantUploads:/photoprism/import/nc/InstantUploads
+      - /mnt/btrfs/photos:/photoprism/originals
+      - ./photoprism/var/lib:/var/lib/photoprism
+    restart: unless-stopped
+
+  heimdall:
+    image: ghcr.io/linuxserver/heimdall
+    container_name: heimdall
+    env_file:
+      - ./envs/main.env
+    volumes:
+      - ./heimdall:/config
+    ports:
+      - 89:80
+      - 449:443
+    restart: unless-stopped
+
+  freshrss:
+    image: freshrss/freshrss
+    container_name: freshrss
+    depends_on:
+      - database
+    volumes:
+      - ./freshrss/data:/var/www/FreshRSS/data
+      - ./freshrss/extensions:/var/www/FreshRSS/extensions
+    env_file:
+      - ./envs/main.env
+      - ./envs/freshrss.env
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    ports:
+      - 8084:80
+    environment:
+      - PMA_ARBITRARY=1
+
+  wordpress:
+    image: wordpress
+    container_name: wordpress
+    restart: unless-stopped
+    ports:
+      - 8080:80
+    env_file:
+      - ./envs/main.env
+      - ./envs/wordpress.env
+    volumes:
+      - ./wordpress:/var/www/html
+      - ./envs/upload.ini:/usr/local/etc/php/conf.d/uploads.ini
+
+  wordpress2:
+    image: wordpress
+    container_name: wordpress2
+    restart: unless-stopped
+    ports:
+      - 8081:80
+    env_file:
+      - ./envs/main.env
+      - ./envs/wordpress2.env
+    volumes:
+      - ./wordpress2:/var/www/html
+      - ./envs/upload.ini:/usr/local/etc/php/conf.d/uploads.ini
+
+  filebrowser:
+    image: filebrowser/filebrowser
+    user: '1000'
+    container_name: filebrowser
+    env_file:
+      - ./envs/main.env
+    volumes:
+      - /mnt/btrfs:/srv/btrfs
+      - /opt:/srv/opt
+      - /mnt/ssd/docker:/srv/docker
+      - /mnt/gd:/srv/gd
+      - ./filebrowser/srv:/srv
+      - ./filebrowser/filebrowser.db:/database.db
+      - ./filebrowser/.filebrowser.json:/.filebrowser.json
+    restart: unless-stopped 
+
+  receipes:
+    image: vabene1111/recipes
+    container_name: recipes
+    env_file:
+      - ./envs/main.env
+      - ./envs/recipes.env      
+    volumes:
+      - ./recipes/static:/opt/recipes/staticfiles
+      - ./recipes/media:/opt/recipes/mediafiles
+    ports:
+      - 8087:8080      
+    depends_on: 
+      - database
+    restart: unless-stopped   
+
+  cops:
+    image: ghcr.io/linuxserver/cops
+    container_name: cops
+    env_file:
+      - ./envs/main.env
+    volumes:
+      - ./cops:/config
+      - /mnt/btrfs/Media/Books:/books
+    ports:
+      - 83:80
+    restart: unless-stopped
+
+  wiki:
+    image: requarks/wiki
+    container_name: wiki
+    env_file:
+      - ./envs/main.env
+      - ./envs/wiki.env 
+    volumes:
+      - ./wiki:/wiki/data/content
+      - ./wiki/backups:/wiki/backups
+    ports:
+      - 3009:3000
+    depends_on: 
+      - database
+    restart: unless-stopped
+    
+  vscode:
+    image: linuxserver/code-server
+    container_name: vscode
+    env_file:
+      - ./envs/main.env
+      - ./envs/vscode.env
+    volumes:
+      - ./vscode/config:/config 
+      - /opt:/opt 
+      - /mnt:/mnt
+      - /mnt/ssd/docker:/mnt/ssd/docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /coserv:/coserv
+      - /home/dulanic:/home/dulanic
+    ports:
+      - 8443:8443/tcp
+    restart: unless-stopped
+
+  unpackerr:
+    image: golift/unpackerr
+    container_name: unpackerr    
+    env_file:
+      - ./envs/main.env
+      - ./envs/unpackerr.env
+    volumes:
+      - /mnt/btrfs:/mnt/btrfs
+    restart: unless-stopped
+
+  duplicati:
+    image: ghcr.io/linuxserver/duplicati
+    hostname: backup.dulanic.com
+    container_name: duplicati
+    env_file:
+      - ./envs/duplicati.env    
+    volumes:
+      - ./duplicati:/config
+      - /mnt/usb-ext:/mnt/usb-ext
+      - /mnt/nextloud:/mnt/nextcloud
+      - /:/source
+      - ./duplicati/backup:/backups
+    ports:
+      - 8204:8200
+    restart: unless-stopped
+    
+  wireguard:
+    image: linuxserver/wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    # DO NOT INCLUDE MAIN ENV! PUID/PGID CAUSES WG TO USE TRUE IP AND NOT LOAD WG!!!!!  
+    ports:
+    volumes:
+      - ./wireguard:/config
+    ports:
+      - 6881:6881
+      - 6881:6881/udp
+      - 8089:8089
+      - 9117:9117
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+
+  wireguardserver:
+    image: linuxserver/wireguard
+    container_name: wireguardserver
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    env_file:
+      - ./envs/main.env
+      - ./envs/wireguardserv.env
+    volumes:
+      - ./wireguardserver:/config
+      - /lib/modules:/lib/modules
+    ports:
+      - 51820:51820/udp
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+
+  qbittorrent:
+    image: linuxserver/qbittorrent
+    container_name: qbittorrent
+    env_file:
+      - ./envs/qbt.env    
+    volumes:
+      - ./qbittorrent:/config
+      - /mnt/btrfs/downloads:/mnt/btrfs/downloads
+      - /mnt/btrfs/downloads:/downloads
+    restart: unless-stopped
+    network_mode: "service:wireguard"
+
+  thelounge:
+    image: thelounge/thelounge
+    container_name: thelounge
+    restart: unless-stopped
+    ports:
+     - 9013:9000
+    env_file:
+      - ./envs/main.env
+    volumes:
+      - ./thelounge:/var/opt/thelounge
+    restart: unless-stopped
+
+  cloudflare-ddns:
+    image: oznu/cloudflare-ddns
+    container_name: cf_ddns
+    environment:
+      - API_KEY=$CF_API_KEY
+      - ZONE=$DOMAIN
+    restart: unless-stopped
+
+  cf_ddns_acsigning:
+    image: oznu/cloudflare-ddns
+    container_name: cf_ddns_acsigning
+    environment:
+      - API_KEY=$CF_API_KEY
+      - ZONE=$DOMAIN2
+    restart: unless-stopped    
+
+  cf_ddns_lph:
+    image: oznu/cloudflare-ddns
+    container_name: cf_ddns_lph
+    environment:
+      - API_KEY=$CF_API_KEY
+      - ZONE=$DOMAIN2
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      TZ: $TZ
+      PGADMIN_DEFAULT_EMAIL: $USEREMAIL
+      PGADMIN_DEFAULT_PASSWORD: $PGADMIN_DEFAULT_PASSWORD
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "False"
+      PGADMIN_LISTEN_PORT: 5050
+    ports:
+      - 5050:5050
+    volumes:
+      - ./pgadmin/storage:/var/lib/pgadmin 
+      - ./pgadmin/config_local.py:/pgadmin4/config_local.py
+      - ./pgadmin/pgadmin4.log:/var/lib/pgadmin/pgadmin4.log
+      - ./import:/import
+    restart: unless-stopped
+
+  jackett:
+    image: ghcr.io/linuxserver/jackett
+    container_name: jackett
+    env_file:
+      - ./envs/jackett.env
+    volumes:
+      - ./jackett/config:/config
+      - /etc/localtime:/etc/localtime
+    network_mode: "service:wireguard"      
+    restart: unless-stopped
+
+  radarr4K:
+    image: linuxserver/radarr
+    container_name: radarr4K
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - ./radarr4K:/config
+      - /mnt:/mnt
+    ports:
+      - 7879:7878
+    depends_on:
+      - qbittorrent
+    environment:
+      - TZ=$TZ
+      - PGID=$PUID
+      - PUID=$PUID
+    restart: unless-stopped
+
+  radarr:
+    image: ghcr.io/linuxserver/radarr
+    container_name: radarr
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - ./radarr:/config
+      - /mnt/:/mnt
+    depends_on:
+      - qbittorrent
+    ports:
+      - 7878:7878 
+    env_file:
+      - ./envs/main.env
+    restart: unless-stopped
+    
+  sonarr:
+    image: ghcr.io/linuxserver/sonarr
+    container_name: sonarr
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - ./sonarr:/config
+      - /mnt:/mnt
+    depends_on:
+      - qbittorrent
+    env_file:
+      - ./envs/main.env
+    restart: unless-stopped
+
+  tautulli:
+    image: ghcr.io/linuxserver/tautulli
+    container_name: tautulli
+    volumes:
+      - ./tautulli/config:/config
+      - ./plex/Library/Application Support/Plex Media Server/Logs:/logs
+    ports:
+      - 8181:8181
+    depends_on:
+      - plex
+    env_file:
+      - ./envs/main.env
+    restart: unless-stopped
+
+  portainer:
+    image: portainer/portainer-ce
+    container_name: portainer
+    ports:
+      - 9001:9000
+    env_file:
+      - ./envs/main.env
+    command: -H unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer:/data
+      - /etc/localtime:/etc/localtime  
+    restart: unless-stopped
+
+  plex:
+    image: ghcr.io/linuxserver/plex
+    container_name: plex
+    env_file:
+      - ./envs/main.env
+      - ./envs/plex.env
+    network_mode: host
+    devices:
+      - /dev/dri
+    volumes:
+      - ./plex:/config
+      - /mnt/ssd/transcode:/transcode
+      - /mnt:/mnt
+      - /mnt/gd/DVR:/dvr
+    restart: unless-stopped
+
+  nextcloud:
+    image: ghcr.io/linuxserver/nextcloud
+    container_name: nextcloud
+    env_file:
+      - ./envs/main.env
+    ports:
+      - "444:443"
+    depends_on:
+      - database     
+    volumes:
+      - ./nextcloud:/config
+      - /mnt/nextcloud:/data
+      - /mnt/gd/nextcloud:/gd
+      - /mnt/btrfs:/mnt/btrfs
+    restart: unless-stopped
+
+  teslamate:
+    image: teslamate/teslamate:edge
+    container_name: teslamate 
+    restart: unless-stopped
+    env_file:
+      - ./envs/teslamate.env
+    depends_on:
+      - database 
+    cap_drop:
+      - all
+  
+  database:
+    image: postgres:13
+    shm_size: 1gb   
+    container_name: postgresql
+    env_file:
+      - ./envs/postgres.env
+    volumes:
+      - ./postgresql/data:/var/lib/postgresql/data
+      - ./import:/import
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200
+    ports:
+      - 5432:5432
+    restart: unless-stopped
+
+  pghero:
+    image: ankane/pghero
+    container_name: pghero
+    environment:
+      PGHERO_TZ: $TZ
+      DATABASE_URL: $DB_URL
+    volumes:
+      - ./pghero/pghero.yml:/app/config/pghero.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: teslamate/grafana:edge
+    restart: unless-stopped
+    container_name: grafana
+    env_file:
+      - ./envs/grafana.env
+    user: "1000"
+    depends_on:
+      - database     
+    volumes:
+      - ./grafana/config:/var/lib/grafana
+  
+  mosquitto:
+    image: eclipse-mosquitto:1.6
+    container_name: mosquitto
+    env_file:
+      - ./envs/main.env  
+    ports:
+      - 1883:1883
+    volumes:
+      - mosquitto-conf:/mosquitto/config
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    restart: unless-stopped
+
+  homeassistant:
+    container_name: homeassistant
+    image: homeassistant/home-assistant:stable 
+   # network_mode: "host"
+    env_file:
+      - ./envs/main.env
+    depends_on:
+      - database
+    ports: 
+      - 8123:8123
+    volumes:
+      - ./homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /home:/home
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8123"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+    
+volumes:
+    mosquitto-conf:
+    mosquitto-data:
+    mosquitto-log:
