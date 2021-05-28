@@ -522,7 +522,7 @@ services:
       - /dev/dri
     volumes:
       - ./plex:/config
-      - /mnt/ssd/transcode:/transcodeyo
+      - /mnt/ssd/transcode:/transcode
       - /mnt:/mnt
       - /mnt/gd/DVR:/dvr
     restart: unless-stopped
